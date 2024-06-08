@@ -21,9 +21,12 @@ export const blogRouter = new Hono<{
 blogRouter.use('/*', async(c, next)=>{
 
 
-    const header = c.req.header('Authorization') || "";
+    const authHeader = c.req.header('Authorization') || "";
 
-    const user = await verify(header, c.env.JWT_SECRET)
+    try{
+
+    
+    const user = await verify(authHeader, c.env.JWT_SECRET)
 
     if(user){
        c.set("userId", user.id);
@@ -32,9 +35,17 @@ blogRouter.use('/*', async(c, next)=>{
        c.status(403)
        return c.json({ error : "Unauthorized -- You are not logged in"})
     }
+   }
+   catch(err){
+       c.status(403);
+       return c.json({
+        message : "you are not logged in"
+       })
+   }
+
 })
 
-blogRouter.post('/', async(c)=>{
+blogRouter.post('/create', async(c)=>{
 
     const body = await c.req.json();
 
@@ -65,9 +76,10 @@ blogRouter.post('/', async(c)=>{
           authorId: authorId
         },
       })
-return c.json({
-    id : post.id
-})
+
+     return c.json({
+        id : post.id
+    })
     }catch(err){
         c.json({ error:"Error while creating blog"})
     }
@@ -75,7 +87,7 @@ return c.json({
 
 
 
-blogRouter.put('/', async(c)=>{
+blogRouter.put('/update', async(c)=>{
 
     const body = await c.req.json();
 
@@ -138,6 +150,8 @@ blogRouter.get('/:id', async(c)=>{
 })
 
 
+
+// bug ::  Not able to get all blogs in bulk
 blogRouter.get('/', async(c)=>{
 
     const prisma = new PrismaClient({
@@ -147,11 +161,31 @@ blogRouter.get('/', async(c)=>{
 
     try{
 
-        const post = await prisma.post.findMany();
+        const posts = await prisma.post.findMany( {
+            select:{
+                content:true,
+                title:true,
+                id:true,
+                author:{
+                    select:{
+                        name:true
+                    }
+                }
+            }
+        }
+    );
 
-      return c.json({
-        post: post
+        if (!posts) {
+            c.status(404)
+            c.json({ error: "No posts found" });
+            return;
+        }
+        c.status(200)
+         
+        return c.json({
+           post : posts
       })
+      
     }catch(err){
 
         c.status(411)
